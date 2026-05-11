@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swivl M2 Delivery Infrastructure Model</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --color-black: #000000;
+      --color-grey-text: #7A7A7A;
+      --color-bg-light: #F5F5F7;
+      --color-white: #FFFFFF;
+      --color-m2-purple: #8E47FF;
+      --color-m2-purple-light: rgba(142, 71, 255, 0.1);
+      --color-m2-green: #99EF83;
+      --color-m2-teal: #5BC1BB;
+      --color-border: #E2E8F0;
+      --font-family: 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: var(--font-family);
+      background-color: var(--color-bg-light);
+      color: var(--color-grey-text);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    h1, h2, h3, h4, strong { color: var(--color-black); font-weight: 600; }
+
+    /* WEB APP UI STYLES */
+    .app-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background-color: var(--color-white);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+    h1 { font-size: 1.75rem; color: var(--color-m2-purple); }
+    .header-subtitle { font-size: 0.875rem; margin-top: 0.25rem; }
+
+    .btn-generate {
+      background-color: var(--color-m2-purple);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn-generate:hover { background-color: #6B0EFF; }
+
+    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } header { flex-direction: column; align-items: flex-start; gap: 1rem; } }
+
+    .card { background-color: var(--color-white); border: 1px solid var(--color-border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .card h3 { font-size: 1.125rem; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--color-border); }
+
+    .cohort-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+    .cohort-header { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: var(--color-grey-text); letter-spacing: 0.05em; }
+    .cohort-label { font-size: 0.875rem; font-weight: 600; color: var(--color-black); }
+
+    input[type="text"], input[type="number"], select { width: 100%; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.875rem; font-family: var(--font-family); }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus { outline: none; border-color: var(--color-m2-purple); box-shadow: 0 0 0 2px var(--color-m2-purple-light); }
+    input[type="range"] { width: 100%; cursor: pointer; margin: 8px 0; accent-color: var(--color-m2-purple); }
+
+    .form-group { margin-bottom: 1.25rem; }
+    .form-group label { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--color-grey-text); margin-bottom: 0.5rem; }
+    .hint { font-size: 0.75rem; color: var(--color-grey-text); margin-top: 4px; }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .metric-card { padding: 1.25rem; border: 1px solid var(--color-border); border-radius: 8px; background-color: var(--color-bg-light); }
+    .metric-card.highlight { grid-column: span 2; background-color: #E8F5E9; border-color: var(--color-m2-green); display: flex; justify-content: space-between; align-items: center; }
+    .metric-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--color-grey-text); margin-bottom: 0.5rem; }
+    .metric-value { font-size: 1.75rem; font-weight: 700; color: var(--color-m2-purple); }
+
+    .revenue-row { display: flex; justify-content: space-between; padding: 0.5rem 0; font-size: 0.875rem; color: var(--color-black); }
+    .revenue-row.total { border-top: 1px solid var(--color-border); margin-top: 0.5rem; padding-top: 0.75rem; font-weight: 700; }
+
+    .table-container { overflow-x: auto; margin-top: 1rem; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
+    th { background-color: var(--color-bg-light); padding: 0.75rem 1rem; color: var(--color-grey-text); font-weight: 700; text-transform: uppercase; font-size: 0.75rem; border-bottom: 2px solid var(--color-border); }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); color: var(--color-black); }
+    .td-savings { font-weight: 700; color: #2e7d32; }
+
+    /* HIDDEN PRINT TEMPLATE STYLES */
+    .print-only { display: none; }
+
+    /* PRINT MEDIA QUERY - Overrides everything for PDF Generation */
+    @media print {
+      @page { size: letter; margin: 0.5in; }
+      body { background-color: #ffffff; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .app-container { display: none !important; }
+      .print-only { display: block; width: 100%; max-width: 800px; margin: 0 auto; color: #000; }
+      
+      .p-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 4px solid var(--color-m2-purple); padding-bottom: 1rem; margin-bottom: 2rem; }
+      .p-logo { font-weight: 800; font-size: 2rem; letter-spacing: -1px; color: #000; }
+      .p-subtext { text-transform: uppercase; font-weight: 700; color: var(--color-m2-purple); font-size: 0.875rem; }
+      
+      .p-title-area { margin-bottom: 2.5rem; }
+      .p-title { font-size: 2.5rem; font-weight: 800; line-height: 1.1; margin-bottom: 1rem; color: #000; }
+      .p-subtitle { font-size: 1.25rem; color: #555; max-width: 90%; line-height: 1.4; }
+
+      .p-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+      .p-card { background-color: var(--color-bg-light); border-left: 6px solid var(--color-m2-purple); padding: 1.5rem; border-radius: 4px; }
+      .p-card.highlight { background-color: #E8F5E9; border-left-color: var(--color-m2-green); }
+      .p-card-title { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #555; margin-bottom: 0.5rem; }
+      .p-card-val { font-size: 2.5rem; font-weight: 800; color: var(--color-black); line-height: 1; }
+      .p-card.highlight .p-card-val { color: #2e7d32; }
+
+      .p-section-title { font-size: 1.25rem; font-weight: 700; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+      
+      .p-table { width: 100%; border-collapse: collapse; margin-bottom: 2.5rem; font-size: 0.9rem; }
+      .p-table th { background: #f0f0f0; text-transform: uppercase; font-size: 0.7rem; padding: 10px; border: 1px solid #ddd; }
+      .p-table td { padding: 10px; border: 1px solid #ddd; text-align: center; }
+      .p-table td:first-child { text-align: left; font-weight: 600; }
+      .p-table tr:last-child { background: var(--color-m2-purple-light); font-weight: 700; }
+      
+      .p-features { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem; font-size: 0.9rem; }
+      .p-feat-item h4 { font-size: 1rem; color: var(--color-m2-purple); margin-bottom: 0.25rem; }
+      .p-feat-item p { color: #444; }
+
+      .p-footer { margin-top: 3rem; text-align: center; font-size: 0.75rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <header>
+      <div>
+        <h1>Swivl Delivery Infrastructure Model</h1>
+        <div class="header-subtitle">Cohort-Based ROI Simulator & Executive Brief Generator</div>
+      </div>
+      <button class="btn-generate" onclick="generateBrief()">Generate Executive Brief</button>
+    </header>
+
+    <div class="grid">
+      <div>
+        <div class="card" style="border-color: var(--color-m2-purple);">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="color: var(--color-m2-purple);"><span>Target District Name</span></label>
+            <input type="text" id="in-district-name" placeholder="e.g. Florence School District 1">
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>District Demographics (Cohorts)</h3>
+          <div class="cohort-grid cohort-header"><div>Tier</div><div>Bldgs</div><div>Grades/Bldg</div><div>Tchrs/Grade</div><div>Staff/Bldg</div></div>
+          <div class="cohort-grid"><div class="cohort-label">Elementary</div><input type="number" id="elem-bldgs" value="5"><input type="number" id="elem-grades" value="5"><input type="number" id="elem-tchrs" value="4"><input type="number" id="elem-staff" value="2"></div>
+          <div class="cohort-grid"><div class="cohort-label">Middle</div><input type="number" id="mid-bldgs" value="1"><input type="number" id="mid-grades" value="2"><input type="number" id="mid-tchrs" value="7"><input type="number" id="mid-staff" value="3"></div>
+          <div class="cohort-grid"><div class="cohort-label">High</div><input type="number" id="high-bldgs" value="2"><input type="number" id="high-grades" value="4"><input type="number" id="high-tchrs" value="5"><input type="number" id="high-staff" value="3"></div>
+        </div>
+
+        <div class="card">
+          <h3>Swivl Infrastructure Setup</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin-bottom: 0;"><label><span>Central / Dist. Staff</span></label><input type="number" id="in-dist-admins" value="5"></div>
+            <div class="form-group" style="margin-bottom: 0;"><label><span>Hardware Spares %</span></label><input type="number" id="in-spares" value="5"></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin-bottom: 0;"><label><span>Yr 1 Implementation Fee</span></label><input type="number" id="in-implementation" value="15000"></div>
+            <div class="form-group" style="margin-bottom: 0;"><label><span>Annual HW Refresh</span></label><input type="number" id="in-hw-refresh" value="2"></div>
+          </div>
+        </div>
+
+        <div class="card" style="background-color: var(--color-bg-light);">
+          <h3>Legacy PD Budget Modeler</h3>
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin-bottom: 0;"><label><span>Legacy PD Contract Total</span></label><input type="number" id="in-known-budget" value="202800"></div>
+            <div class="form-group" style="margin-bottom: 0;"><label><span>Contract Term</span></label>
+              <select id="in-contract-term"><option value="1" selected>1 Yr</option><option value="2">2 Yrs</option><option value="3">3 Yrs</option></select>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;"><label><span>Scaled-Down PD Retainer (Annual)</span></label><input type="number" id="in-retained" value="20000"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="metric-grid">
+          <div class="metric-card"><div class="metric-title">Total Faculty + Staff</div><div class="metric-value" id="out-total-staff">0</div></div>
+          <div class="metric-card"><div class="metric-title">Total Licenses (ARR)</div><div class="metric-value" id="out-licenses">0</div></div>
+          <div class="metric-card highlight"><div><div class="metric-title" style="color: #2e7d32;">4-Yr District Savings</div></div><div class="metric-value" id="out-savings" style="color: #2e7d32;">$0</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Swivl Revenue Impact</h3>
+          <div class="revenue-row"><span style="color: var(--color-grey-text)">Yr 1 (HW + Setup)</span><strong id="out-rev-hw">$0</strong></div>
+          <div class="revenue-row"><span style="color: var(--color-grey-text)">Software Layer (ARR)</span><strong style="color: var(--color-m2-purple);" id="out-rev-arr">$0</strong></div>
+        </div>
+      </div>
+      
+      <div class="card" style="grid-column: 1 / -1;">
+        <h3>Year-by-Year Cash Flow</h3>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Academic Yr</th><th>Legacy Spend</th><th>Swivl HW & Setup</th><th>Swivl ARR</th><th>Retained Content</th><th>New Model Total</th><th>Annual Savings</th></tr></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="print-only">
+    <div class="p-header">
+      <div class="p-logo">Swivl</div>
+      <div class="p-subtext">M2 + SWIVL FOR <span id="p-dist-name-header">YOUR DISTRICT</span></div>
+    </div>
+
+    <div class="p-title-area">
+      <div class="p-title">Scale instructional coaching across <span id="p-bldg-count">0</span> schools.</div>
+      <div class="p-subtitle"><span id="p-dist-name-body">Your district</span> can bring consistent coaching, real-time instructional support, and higher instructional quality into each classroom—without relying solely on external consultants or new hires.</div>
+    </div>
+
+    <div class="p-metrics-grid">
+      <div class="p-card">
+        <div class="p-card-title">Legacy 4-Yr Coaching Cost</div>
+        <div class="p-card-val" id="p-legacy-cost">$0</div>
+        <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">Recurring external labor expense</div>
+      </div>
+      <div class="p-card">
+        <div class="p-card-title">In-House M2 Infrastructure (4-Yr)</div>
+        <div class="p-card-val" id="p-swivl-cost" style="color: var(--color-m2-purple);">$0</div>
+        <div style="font-size: 0.8rem; color: #666; margin-top: 5px;">Hardware, ARR & Retained Experts</div>
+      </div>
+      <div class="p-card highlight" style="grid-column: span 2;">
+        <div class="p-card-title" style="color: #2e7d32;">Projected 4-Year District Savings</div>
+        <div class="p-card-val" id="p-savings-cost" style="font-size: 3.5rem;">$0</div>
+      </div>
+    </div>
+
+    <div class="p-section-title">Cash Flow & ROI Breakdown</div>
+    <table class="p-table">
+      <thead><tr><th>Timeline</th><th>Legacy Spend</th><th>M2 Hardware</th><th>MirrorTalk (ARR)</th><th>Retained Experts</th><th>New Model Spend</th><th>Net Savings</th></tr></thead>
+      <tbody id="p-table-body"></tbody>
+    </table>
+
+    <div class="p-section-title">What's Included in the Infrastructure</div>
+    <div class="p-features">
+      <div class="p-feat-item">
+        <h4>School-wide Site Licenses</h4>
+        <p>Unlimited use for all <span id="p-feat-staff">0</span> teachers, coaches, and administrators across the district.</p>
+      </div>
+      <div class="p-feat-item">
+        <h4><span id="p-feat-hw">0</span> M2 Devices</h4>
+        <p>Fully equipped hardware fleets deployed across all tier levels, including IT spares.</p>
+      </div>
+      <div class="p-feat-item">
+        <h4>Real-Time AI Feedback</h4>
+        <p>M2 delivers the kind of instructional support that used to require a fully staffed coaching team.</p>
+      </div>
+      <div class="p-feat-item">
+        <h4>Fundable & Compliant</h4>
+        <p>Fundable through Title II, III, IV and IDEA, satisfying Advance evaluation cycles via continuous data.</p>
+      </div>
+    </div>
+
+    <div class="p-footer">
+      Generated for internal financial review. All numbers are estimates based on provided headcount and legacy contract parameters.
+    </div>
+  </div>
+
+  <script>
+    const inputs = {
+      distName: document.getElementById('in-district-name'),
+      eB: document.getElementById('elem-bldgs'), eG: document.getElementById('elem-grades'), eT: document.getElementById('elem-tchrs'), eS: document.getElementById('elem-staff'),
+      mB: document.getElementById('mid-bldgs'), mG: document.getElementById('mid-grades'), mT: document.getElementById('mid-tchrs'), mS: document.getElementById('mid-staff'),
+      hB: document.getElementById('high-bldgs'), hG: document.getElementById('high-grades'), hT: document.getElementById('high-tchrs'), hS: document.getElementById('high-staff'),
+      distAdmins: document.getElementById('in-dist-admins'), estCost: document.getElementById('in-est-cost'),
+      knownBudg: document.getElementById('in-known-budget'), contractTerm: document.getElementById('in-contract-term'), retainer: document.getElementById('in-retained'),
+      implementation: document.getElementById('in-implementation'), spares: document.getElementById('in-spares'), hwRefresh: document.getElementById('in-hw-refresh')
+    };
+
+    const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+    function getLicensePrice(users) {
+      if (users >= 100) return 160; if (users >= 50) return 190; if (users >= 10) return 220; return 250;
+    }
+
+    let globalData = {}; // Store for print function
+
+    function calculate() {
+      const eB = parseInt(inputs.eB.value)||0; const mB = parseInt(inputs.mB.value)||0; const hB = parseInt(inputs.hB.value)||0;
+      const totalBldgs = eB + mB + hB;
+      
+      const baseUnits = (eB * (parseInt(inputs.eG.value)||0) * 2) + (mB * (parseInt(inputs.mG.value)||0) * 2) + (hB * (parseInt(inputs.hG.value)||0) * 2);
+      const totalHWUnits = Math.ceil(baseUnits * (1 + ((parseInt(inputs.spares.value)||0) / 100)));
+      
+      const totalFaculty = (eB * (parseInt(inputs.eG.value)||0) * (parseInt(inputs.eT.value)||0)) + (mB * (parseInt(inputs.mG.value)||0) * (parseInt(inputs.mT.value)||0)) + (hB * (parseInt(inputs.hG.value)||0) * (parseInt(inputs.hT.value)||0));
+      const totalBldgStaff = (eB * (parseInt(inputs.eS.value)||0)) + (mB * (parseInt(inputs.mS.value)||0)) + (hB * (parseInt(inputs.hS.value)||0));
+      const totalLicensedUsers = totalFaculty + totalBldgStaff + (parseInt(inputs.distAdmins.value)||0);
+
+      const yr1HardwareCost = totalHWUnits * 3000;
+      const refreshHWCost = (parseInt(inputs.hwRefresh.value)||0) * 3000;
+      const implCost = parseInt(inputs.implementation.value)||0;
+      const annualLicenseARR = totalLicensedUsers * getLicensePrice(totalLicensedUsers);
+
+      const annualLegacySpend = (parseInt(inputs.knownBudg.value)||0) / (parseInt(inputs.contractTerm.value)||1);
+      const annualRetainer = parseInt(inputs.retainer.value)||0;
+
+      let cumPD = 0, cumNewModel = 0;
+      const tableBody = document.getElementById('table-body');
+      tableBody.innerHTML = ''; 
+      
+      let pTableHTML = ''; // For print view
+
+      for(let yr = 1; yr <= 4; yr++) {
+        cumPD += annualLegacySpend;
+        const hwAndSetupThisYear = (yr === 1) ? (yr1HardwareCost + implCost) : refreshHWCost;
+        const totalNewModelSpend = hwAndSetupThisYear + annualLicenseARR + annualRetainer;
+        cumNewModel += totalNewModelSpend;
+        const annualSavings = annualLegacySpend - totalNewModelSpend;
+
+        // UI Table
+        tableBody.innerHTML += `<tr><td>Year ${yr}</td><td>${formatter.format(annualLegacySpend)}</td><td>${formatter.format(hwAndSetupThisYear)}</td><td>${formatter.format(annualLicenseARR)}</td><td>${formatter.format(annualRetainer)}</td><td><strong>${formatter.format(totalNewModelSpend)}</strong></td><td class="${annualSavings >= 0 ? 'td-savings' : ''}">${formatter.format(annualSavings)}</td></tr>`;
+        
+        // Print Table
+        pTableHTML += `<tr><td>Year ${yr}</td><td>${formatter.format(annualLegacySpend)}</td><td>${formatter.format(hwAndSetupThisYear)}</td><td>${formatter.format(annualLicenseARR)}</td><td>${formatter.format(annualRetainer)}</td><td>${formatter.format(totalNewModelSpend)}</td><td>${formatter.format(annualSavings)}</td></tr>`;
+      }
+
+      const totalSavings = cumPD - cumNewModel;
+
+      // Update UI
+      document.getElementById('out-total-staff').innerText = totalLicensedUsers;
+      document.getElementById('out-licenses').innerText = totalLicensedUsers;
+      document.getElementById('out-savings').innerText = formatter.format(totalSavings);
+      document.getElementById('out-rev-hw').innerText = formatter.format(yr1HardwareCost + implCost);
+      document.getElementById('out-rev-arr').innerText = formatter.format(annualLicenseARR);
+
+      // Save to global for print formatting
+      globalData = { 
+        distName: inputs.distName.value || "The District", bldgs: totalBldgs, staff: totalLicensedUsers, hw: totalHWUnits,
+        legacyTotal: cumPD, newModelTotal: cumNewModel, savingsTotal: totalSavings, pTableHTML: pTableHTML
+      };
+    }
+
+    function generateBrief() {
+      // Hydrate Print Template
+      document.getElementById('p-dist-name-header').innerText = globalData.distName.toUpperCase();
+      document.getElementById('p-dist-name-body').innerText = globalData.distName;
+      document.getElementById('p-bldg-count').innerText = globalData.bldgs;
+      document.getElementById('p-legacy-cost').innerText = formatter.format(globalData.legacyTotal);
+      document.getElementById('p-swivl-cost').innerText = formatter.format(globalData.newModelTotal);
+      document.getElementById('p-savings-cost').innerText = formatter.format(globalData.savingsTotal);
+      document.getElementById('p-feat-staff').innerText = globalData.staff;
+      document.getElementById('p-feat-hw').innerText = globalData.hw;
+      
+      const pTable = document.getElementById('p-table-body');
+      pTable.innerHTML = globalData.pTableHTML + `<tr><td>4-Yr Total</td><td>${formatter.format(globalData.legacyTotal)}</td><td>-</td><td>-</td><td>-</td><td>${formatter.format(globalData.newModelTotal)}</td><td>${formatter.format(globalData.savingsTotal)}</td></tr>`;
+
+      window.print();
+    }
+
+    Object.values(inputs).forEach(input => { input.addEventListener('input', calculate); });
+    document.addEventListener('DOMContentLoaded', calculate);
+  </script>
+</body>
+</html>
