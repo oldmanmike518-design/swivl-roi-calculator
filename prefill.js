@@ -236,6 +236,43 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
+  // Read a numeric field from the scan, trying multiple paths in order.
+  // Some scans return nces_profile/spend_profile with all-None values
+  // (the collectors ran but the structured profile didn't populate);
+  // in that case the same numbers live under scan.data_confidence as
+  // {value, confidence, source, note} dicts. This helper falls back so
+  // pre-fill works either way.
+  function readScanNumber(scan, paths) {
+    for (var i = 0; i < paths.length; i++) {
+      var parts = paths[i].split(".");
+      var cur = scan;
+      var ok = true;
+      for (var j = 0; j < parts.length; j++) {
+        if (cur == null || typeof cur !== "object") { ok = false; break; }
+        cur = cur[parts[j]];
+      }
+      if (ok && cur != null && cur !== "") {
+        var n = Number(cur);
+        if (isFinite(n) && n !== 0) return n;
+      }
+    }
+    return null;
+  }
+
+  function readScanString(scan, paths) {
+    for (var i = 0; i < paths.length; i++) {
+      var parts = paths[i].split(".");
+      var cur = scan;
+      var ok = true;
+      for (var j = 0; j < parts.length; j++) {
+        if (cur == null || typeof cur !== "object") { ok = false; break; }
+        cur = cur[parts[j]];
+      }
+      if (ok && typeof cur === "string" && cur.length) return cur;
+    }
+    return null;
+  }
+
   function applyPrefill() {
     var scan = readScan();
     if (!scan) return;  // standalone mode — calculator stays at defaults
@@ -244,28 +281,61 @@
     var districtLabel = (scan.district_name || "") + (scan.state ? ", " + scan.state : "");
     setField("in-district-name", districtLabel);
 
-    var totalBldgs = Number(p.schools) || 0;
-    var split = splitSchools(totalBldgs, p.locale_label);
+    // Schools: try nces_profile first, fall back to data_confidence.
+    var totalBldgs = readScanNumber(scan, [
+      "nces_profile.schools",
+      "data_confidence.schools.value",
+    ]) || 0;
+    var localeLabel = readScanString(scan, [
+      "nces_profile.locale_label",
+      "data_confidence.locale_label.value",
+    ]);
+    var split = splitSchools(totalBldgs, localeLabel);
     setField("elem-bldgs", split.eB);
     setField("mid-bldgs", split.mB);
     setField("high-bldgs", split.hB);
 
-    // Standard grade-band lengths — leave the rep's values intact when the
-    // scan has no NCES profile, otherwise normalize.
-    if (p && (p.enrollment || p.teachers_fte)) {
+    var enrollment = readScanNumber(scan, [
+      "nces_profile.enrollment",
+      "data_confidence.enrollment.value",
+    ]);
+    var teachersFte = readScanNumber(scan, [
+      "nces_profile.teachers_fte",
+      "data_confidence.teachers_fte.value",
+    ]);
+
+    // Standard grade-band lengths — only normalize when we have some
+    // form of size signal (otherwise leave the rep's defaults intact).
+    if (totalBldgs || enrollment || teachersFte) {
       setField("elem-grades", GRADES_PER_BLDG.elem);
       setField("mid-grades", GRADES_PER_BLDG.mid);
       setField("high-grades", GRADES_PER_BLDG.high);
     }
 
-    var tchrs = teachersPerGrade(Number(p.teachers_fte) || 0, split.eB, split.mB, split.hB);
+    // Teachers-per-grade: back-solve from FTE. When teachers_fte is
+    // unavailable, estimate from enrollment using a 16:1 student/teacher
+    // ratio (US public-school average ≈ 15.4) — this avoids leaving the
+    // calculator with default values that produce undersized cohorts.
+    if (!teachersFte && enrollment) {
+      teachersFte = Math.round(enrollment / 16);
+    }
+    var tchrs = teachersPerGrade(teachersFte || 0, split.eB, split.mB, split.hB);
     if (tchrs) {
       setField("elem-tchrs", tchrs);
       setField("mid-tchrs", tchrs);
       setField("high-tchrs", tchrs);
     }
 
+    // Staff-per-bldg: prefer the structured profile when present (it has
+    // the three FTE fields). Fall back to a fraction of teacher FTE when
+    // only data_confidence is populated.
     var staff = staffPerBldg(p, split.eB + split.mB + split.hB);
+    if (!staff && teachersFte && (split.eB + split.mB + split.hB) > 0) {
+      // Rough heuristic: support staff (aides + counselors + other) is
+      // typically ~20% of teacher FTE.
+      var inferredSupportFte = Math.round(teachersFte * 0.20);
+      staff = Math.max(1, Math.round(inferredSupportFte / (split.eB + split.mB + split.hB)));
+    }
     if (staff) {
       setField("elem-staff", staff);
       setField("mid-staff", staff);
