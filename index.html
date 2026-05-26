@@ -366,6 +366,11 @@
 
     Object.values(inputs).forEach(input => { input.addEventListener('input', calculate); });
     document.addEventListener('DOMContentLoaded', calculate);
+
+    // Expose the brief generator so prefill.js can deep-link via ?view=brief
+    window.generateBrief = generateBrief;
   </script>
+  <!-- M2 scan pre-fill bridge (no-op when no scan payload in sessionStorage) -->
+  <script src="./prefill.js"></script>
 </body>
 </html>
