@@ -1,10 +1,19 @@
 /* Swivl ROI Calculator — scan pre-fill bridge.
 
    When the calculator is opened with a scan payload in
-   sessionStorage["m2_scan_for_roi"], this script maps scan fields onto
+   localStorage["m2_scan_for_roi"], this script maps scan fields onto
    the calculator's inputs and triggers a recompute. When no payload is
    present the calculator stays at its default values (standalone mode
    — unchanged behavior).
+
+   Why localStorage (not sessionStorage): sessionStorage is per-tab.
+   When the dashboard does window.open() to /roi/ in a new tab, the
+   new tab gets an empty sessionStorage even on the same origin
+   (especially when `noopener` is used). localStorage is shared across
+   tabs on the same origin, so the dashboard can write the scan, open
+   the new tab, and the calculator can read it. We attach a timestamp
+   and ignore entries older than 60s so a stale localStorage entry
+   from a previous scan doesn't accidentally fill in this scan.
 
    Mapping (each scan field → calculator input):
      scan.district_name + state          → #in-district-name
@@ -28,7 +37,9 @@
 (function () {
   "use strict";
 
-  var SESSION_KEY = "m2_scan_for_roi";
+  var STORAGE_KEY = "m2_scan_for_roi";
+  var STORAGE_TS_KEY = "m2_scan_for_roi_ts";
+  var MAX_AGE_MS = 60 * 1000;  // ignore entries older than 60s
 
   // ── Cohort heuristic ──────────────────────────────────────────────────────
   // Rough US public-school distribution. The rep can override every field —
@@ -46,14 +57,36 @@
   var GRADES_PER_BLDG = { elem: 6, mid: 3, high: 4 };
 
   function readScan() {
+    // Prefer localStorage (shared across tabs). Fall back to sessionStorage
+    // for backward compatibility with the older dashboard build. Discard
+    // entries older than MAX_AGE_MS so a stale payload from a previous
+    // scan does not silently leak into the current calculator session.
     try {
-      var raw = window.sessionStorage.getItem(SESSION_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      var ts = Number(window.localStorage.getItem(STORAGE_TS_KEY) || 0);
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw && ts && (Date.now() - ts) < MAX_AGE_MS) {
+        // Consume the entry — once read, clear it so a stale localStorage
+        // value cannot trigger pre-fill on a future standalone visit.
+        try {
+          window.localStorage.removeItem(STORAGE_KEY);
+          window.localStorage.removeItem(STORAGE_TS_KEY);
+        } catch (e) { /* quota-disabled storage — ignore */ }
+        return JSON.parse(raw);
+      }
     } catch (e) {
-      console.warn("[ROI prefill] could not read scan from sessionStorage:", e);
-      return null;
+      console.warn("[ROI prefill] localStorage read failed:", e);
     }
+    // sessionStorage fallback (older dashboard build that wrote there).
+    try {
+      var raw2 = window.sessionStorage.getItem(STORAGE_KEY);
+      if (raw2) {
+        try { window.sessionStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        return JSON.parse(raw2);
+      }
+    } catch (e) {
+      console.warn("[ROI prefill] sessionStorage read failed:", e);
+    }
+    return null;
   }
 
   function pickTierShare(localeLabel) {
@@ -104,10 +137,20 @@
     return Math.max(1, Math.round(total / totalBldgs));
   }
 
-  // Legacy PD: prefer sum of sourced PD-consultant annual spend
-  // (defensible — specifically named firms with payment/board evidence).
-  // Fall back to F-33 function 2200 (broader, less specific). Returns
-  // { annual, source } or null.
+  // Legacy PD: use ONLY the sum of sourced PD-consultant annual spend
+  // (specifically named firms with payment/board evidence). Returns
+  // { annual, source } or null when nothing defensible is available.
+  //
+  // We intentionally DO NOT fall back to F-33 function 2200. That figure
+  // is the broader "instructional staff support" total — includes
+  // in-house PD coordinators, conference travel, library services, etc.
+  // It is roughly 50x–500x the typical district's external PD vendor
+  // contract. Using it as "Legacy PD Contract Total" produces nonsense
+  // savings numbers in the calculator and a broken exec brief.
+  //
+  // When there are no sourced PD consultant dollars, we leave the
+  // calculator's default ($202,800) in place. The pre-fill banner
+  // tells the rep to type in the actual contract number from the call.
   function pickLegacyPDAnnual(scan) {
     var consultants = (scan.pd_consultant_replacements || [])
       .filter(function (r) { return Number(r.estimated_annual_spend) > 0; });
@@ -118,17 +161,8 @@
       var firms = consultants.map(function (r) { return r.canonical_name; });
       return {
         annual: Math.round(total),
-        source: "Detected PD firms with sourced annual spend: " + firms.join(", ")
-      };
-    }
-    var sp = scan.spend_profile
-      || (scan.data_confidence && scan.data_confidence.pd_coaching_spend)
-      || null;
-    var f33 = sp && (sp.instructional_staff_support_2200 || sp.value);
-    if (f33 && f33 > 0) {
-      return {
-        annual: Math.round(f33),
-        source: "F-33 function 2200 (instructional staff support — broader than PD vendor contracts; verify with district CFO)"
+        source: "Sum of detected PD firms with sourced annual spend: "
+          + firms.join(", ")
       };
     }
     return null;
@@ -173,6 +207,14 @@
         '<div style="margin-top: 6px; font-size: 0.82rem; color: #666;">' +
         '<strong>Legacy PD Contract Total source:</strong> ' +
         escapeHTML(legacyPD.source) +
+        '</div>'
+      );
+    } else {
+      lines.push(
+        '<div style="margin-top: 6px; font-size: 0.82rem; color: #b85c00;">' +
+        '<strong>Legacy PD Contract Total not pre-filled:</strong> ' +
+        'no named PD vendor with sourced annual spend was detected. ' +
+        'Enter the actual contract amount from the district before generating the brief.' +
         '</div>'
       );
     }
@@ -242,19 +284,70 @@
     showBanner(scan, legacyPD);
 
     // Deep-link: ?view=brief auto-invokes the print/brief flow once the
-    // prefill is in place.
+    // prefill is in place — but ONLY when the auto-filled numbers
+    // produce a positive 4-year savings figure. When the detected
+    // Legacy PD spend is small relative to the M2 deployment cost
+    // (common when only one or two named PD vendors were detected on a
+    // large district), the auto-generated brief would show negative
+    // savings — wrong artifact to send a CFO. In that case we skip
+    // the auto-print and surface a clearer warning so the rep enters
+    // the real contract number before generating.
     try {
       var params = new URLSearchParams(window.location.search);
       if (params.get("view") === "brief" && typeof window.generateBrief === "function") {
-        // Slight defer so the synchronous calculate() reruns finish first.
         setTimeout(function () {
-          try { window.generateBrief(); } catch (e) {
+          try {
+            var savingsEl = document.getElementById("out-savings");
+            var savingsText = (savingsEl && savingsEl.innerText) || "";
+            var negative = savingsText.indexOf("-") >= 0
+              || /\bnegative\b/i.test(savingsText);
+            if (negative) {
+              showNegativeSavingsWarning(legacyPD);
+              return;
+            }
+            window.generateBrief();
+          } catch (e) {
             console.warn("[ROI prefill] generateBrief failed:", e);
           }
         }, 60);
       }
     } catch (e) {
       // URLSearchParams not available — silently skip the deep-link branch.
+    }
+  }
+
+  function showNegativeSavingsWarning(legacyPD) {
+    var existing = document.getElementById("m2-prefill-warning");
+    if (existing) existing.remove();
+    var legacyDescription = legacyPD
+      ? ('Detected legacy PD ($' +
+         Number(legacyPD.annual).toLocaleString("en-US") +
+         '/yr) is smaller than typical for a district this size.')
+      : 'No legacy PD vendor was detected on this district.';
+    var div = document.createElement("div");
+    div.id = "m2-prefill-warning";
+    div.style.cssText = [
+      "background: #fff3cd",
+      "border: 1px solid #c8a200",
+      "border-radius: 8px",
+      "padding: 14px 18px",
+      "margin: 16px 0",
+      "font-family: 'Inter', sans-serif",
+      "font-size: 0.92rem",
+      "color: #6a4a00"
+    ].join(";");
+    div.innerHTML =
+      '<strong>Cannot auto-generate exec brief — the math is not favorable yet.</strong>' +
+      '<div style="margin-top: 8px;">' +
+      escapeHTML(legacyDescription) +
+      ' With the auto-filled numbers the calculator shows M2 as a net cost over four years rather than a savings.' +
+      '</div>' +
+      '<div style="margin-top: 8px;">' +
+      '<strong>Next step:</strong> enter the actual <em>Legacy PD Contract Total</em> from the district (across the chosen contract term), watch the 4-Year District Savings turn positive, then click <em>Generate Executive Brief</em> manually.' +
+      '</div>';
+    var container = document.querySelector(".app-container");
+    if (container && container.firstChild) {
+      container.insertBefore(div, container.firstChild);
     }
   }
 
