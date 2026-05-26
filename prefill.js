@@ -178,7 +178,7 @@
     return true;
   }
 
-  function showBanner(scan, legacyPD) {
+  function showBanner(scan, legacyPD, cohortSource) {
     var existing = document.getElementById("m2-prefill-banner");
     if (existing) existing.remove();
     var div = document.createElement("div");
@@ -202,6 +202,16 @@
       ' &middot; LEAID ' + escapeHTML(scan.leaid || "n/a") +
       '</span>'
     );
+    if (cohortSource) {
+      var isReal = cohortSource.indexOf("NCES CCD") === 0;
+      lines.push(
+        '<div style="margin-top: 6px; font-size: 0.82rem; color: '
+        + (isReal ? '#2e7d32' : '#b85c00') + ';">'
+        + '<strong>Cohort source:</strong> '
+        + escapeHTML(cohortSource)
+        + '</div>'
+      );
+    }
     if (legacyPD && legacyPD.source) {
       lines.push(
         '<div style="margin-top: 6px; font-size: 0.82rem; color: #666;">' +
@@ -218,11 +228,22 @@
         '</div>'
       );
     }
-    lines.push(
-      '<div style="margin-top: 6px; font-size: 0.82rem; color: #666;">' +
-      'Cohort splits + staff counts are heuristics derived from NCES — adjust any field before generating the brief.' +
-      '</div>'
-    );
+    // Tail note only when cohort source is heuristic — when it's real
+    // NCES per-tier data, the cohort-source line above already speaks
+    // for itself in green.
+    if (cohortSource && cohortSource.indexOf("NCES CCD") !== 0) {
+      lines.push(
+        '<div style="margin-top: 6px; font-size: 0.82rem; color: #666;">' +
+        'Teacher/staff per-building counts are arithmetic averages from district-level FTE — adjust before generating the brief if your district structure varies (e.g. large flagship high school).' +
+        '</div>'
+      );
+    } else {
+      lines.push(
+        '<div style="margin-top: 6px; font-size: 0.82rem; color: #666;">' +
+        'Teacher/staff per-building counts are arithmetic averages from district-level FTE — verify against the actual flagship high school size if needed.' +
+        '</div>'
+      );
+    }
     div.innerHTML = lines.join("");
     var container = document.querySelector(".app-container");
     if (container && container.firstChild) {
@@ -281,7 +302,23 @@
     var districtLabel = (scan.district_name || "") + (scan.state ? ", " + scan.state : "");
     setField("in-district-name", districtLabel);
 
-    // Schools: try nces_profile first, fall back to data_confidence.
+    // PREFERRED: real per-tier school counts from CCD school_profile.
+    // When all three are present we use them verbatim and skip the
+    // heuristic split entirely. Falls back to the locale-share heuristic
+    // only when per-tier data is unavailable (which should be rare —
+    // every district in the CCD cache has a school_profile breakdown).
+    var realElem = readScanNumber(scan, [
+      "nces_profile.elementary_schools",
+      "data_confidence.elementary_schools.value",
+    ]);
+    var realMid = readScanNumber(scan, [
+      "nces_profile.middle_schools",
+      "data_confidence.middle_schools.value",
+    ]);
+    var realHigh = readScanNumber(scan, [
+      "nces_profile.high_schools",
+      "data_confidence.high_schools.value",
+    ]);
     var totalBldgs = readScanNumber(scan, [
       "nces_profile.schools",
       "data_confidence.schools.value",
@@ -290,7 +327,17 @@
       "nces_profile.locale_label",
       "data_confidence.locale_label.value",
     ]);
-    var split = splitSchools(totalBldgs, localeLabel);
+    var split;
+    if (realElem != null && realMid != null && realHigh != null
+        && (realElem + realMid + realHigh) > 0) {
+      // Real per-tier data from NCES — use verbatim. K-12 cohort math
+      // ignores "other" buildings (PreK, ungraded, alt) by design.
+      split = { eB: realElem | 0, mB: realMid | 0, hB: realHigh | 0 };
+    } else {
+      // Heuristic fallback for districts whose school_profile data
+      // didn't load. Banner will tell the rep these are estimates.
+      split = splitSchools(totalBldgs, localeLabel);
+    }
     setField("elem-bldgs", split.eB);
     setField("mid-bldgs", split.mB);
     setField("high-bldgs", split.hB);
@@ -351,7 +398,11 @@
       setField("in-known-budget", legacyPD.annual * 3);
     }
 
-    showBanner(scan, legacyPD);
+    var cohortSource = (realElem != null && realMid != null && realHigh != null
+        && (realElem + realMid + realHigh) > 0)
+      ? "NCES CCD school_profile (verified per-tier counts)"
+      : "Locale heuristic (verify against district org chart before generating brief)";
+    showBanner(scan, legacyPD, cohortSource);
 
     // Deep-link: ?view=brief auto-invokes the print/brief flow once the
     // prefill is in place — but ONLY when the auto-filled numbers
